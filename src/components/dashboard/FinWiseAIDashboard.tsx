@@ -52,11 +52,11 @@ import {
   Cell
 } from "recharts";
 import { Upload, Plus, Edit, Trash2, DollarSign, TrendingUp, Calendar } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 // Types
 interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
   created_at: string;
@@ -64,8 +64,8 @@ interface User {
 }
 
 interface Category {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   name: string;
   color: string;
   created_at: string;
@@ -73,13 +73,13 @@ interface Category {
 }
 
 interface Transaction {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   date: string;
   description: string;
   amount: number;
   type: "درآمد" | "هزینه";
-  category_id: number | null;
+  category_id: string | null;
   created_at: string;
   updated_at: string;
   category_name?: string;
@@ -97,17 +97,20 @@ export default function FinWiseAIDashboard() {
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [loading, setLoading] = useState(true);
+  
+  const supabase = createClientComponentClient();
 
   // Fetch user data
   useEffect(() => {
     const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (authUser?.email) {
         // Get user profile from our users table
         const { data, error } = await supabase
           .from('users')
           .select('*')
-          .eq('email', user.email)
+          .eq('email', authUser.email)
           .single();
         
         if (!error && data) {
@@ -115,12 +118,16 @@ export default function FinWiseAIDashboard() {
           fetchData(data.id);
         } else {
           // Create user if not exists
+          const fullName = authUser.user_metadata?.full_name || 
+                          authUser.email.split('@')[0] || 
+                          'کاربر';
+          
           const { data: newUser, error: insertError } = await supabase
             .from('users')
             .insert([
               { 
-                name: user.user_metadata?.full_name || user.email.split('@')[0],
-                email: user.email,
+                name: fullName,
+                email: authUser.email,
                 password_hash: '' // We don't store password in our table
               }
             ])
@@ -139,7 +146,7 @@ export default function FinWiseAIDashboard() {
     fetchUser();
   }, []);
 
-  const fetchData = async (userId: number) => {
+  const fetchData = async (userId: string) => {
     try {
       // Fetch categories
       const { data: categoriesData, error: categoriesError } = await supabase
@@ -225,7 +232,7 @@ export default function FinWiseAIDashboard() {
   };
 
   // Handle category change for transaction
-  const handleCategoryChange = async (transactionId: number, categoryId: number) => {
+  const handleCategoryChange = async (transactionId: string, categoryId: string) => {
     if (!user) return;
     
     try {
@@ -282,7 +289,7 @@ export default function FinWiseAIDashboard() {
   };
 
   // Delete category
-  const handleDeleteCategory = async (categoryId: number) => {
+  const handleDeleteCategory = async (categoryId: string) => {
     if (!user) return;
     
     try {
@@ -326,6 +333,22 @@ export default function FinWiseAIDashboard() {
       </div>
     );
   }
+
+  // Prepare data for charts
+  const categorySpendingData = categories.map(category => ({
+    name: category.name,
+    value: transactions
+      .filter(t => t.category_id === category.id && t.type === 'هزینه')
+      .reduce((sum, t) => sum + t.amount, 0)
+  })).filter(c => c.value > 0);
+
+  const monthlyCashFlowData = [
+    { month: "فروردین", income: 4000000, expenses: 2800000 },
+    { month: "اردیبهشت", income: 4200000, expenses: 3100000 },
+    { month: "خرداد", income: 3800000, expenses: 2900000 },
+    { month: "تیر", income: 4100000, expenses: 3200000 },
+    { month: "مرداد", income: 4300000, expenses: 3500000 },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -375,7 +398,7 @@ export default function FinWiseAIDashboard() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">﷼{totalIncome.toLocaleString()}</div>
+              <div className="text-2xl font-bold">﷼{totalIncome.toLocaleString('fa-IR')}</div>
               <p className="text-xs text-muted-foreground">+12% نسبت به ماه گذشته</p>
             </CardContent>
           </Card>
@@ -386,7 +409,7 @@ export default function FinWiseAIDashboard() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">﷼{totalExpenses.toLocaleString()}</div>
+              <div className="text-2xl font-bold">﷼{totalExpenses.toLocaleString('fa-IR')}</div>
               <p className="text-xs text-muted-foreground">+5% نسبت به ماه گذشته</p>
             </CardContent>
           </Card>
@@ -397,7 +420,7 @@ export default function FinWiseAIDashboard() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">﷼{(totalIncome - totalExpenses).toLocaleString()}</div>
+              <div className="text-2xl font-bold">﷼{(totalIncome - totalExpenses).toLocaleString('fa-IR')}</div>
               <p className="text-xs text-muted-foreground">+18% نسبت به ماه گذشته</p>
             </CardContent>
           </Card>
@@ -413,12 +436,7 @@ export default function FinWiseAIDashboard() {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={categories.map(c => ({
-                      name: c.name,
-                      value: transactions
-                        .filter(t => t.category_id === c.id && t.type === 'هزینه')
-                        .reduce((sum, t) => sum + t.amount, 0)
-                    })).filter(c => c.value > 0)}
+                    data={categorySpendingData}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -434,7 +452,7 @@ export default function FinWiseAIDashboard() {
                       />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [`﷼${value.toLocaleString()}`, "مبلغ"]} />
+                  <Tooltip formatter={(value) => [`﷼${Number(value).toLocaleString('fa-IR')}`, "مبلغ"]} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -448,13 +466,7 @@ export default function FinWiseAIDashboard() {
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart
-                  data={[
-                    { month: "فروردین", income: 4000000, expenses: 2800000 },
-                    { month: "اردیبهشت", income: 4200000, expenses: 3100000 },
-                    { month: "خرداد", income: 3800000, expenses: 2900000 },
-                    { month: "تیر", income: 4100000, expenses: 3200000 },
-                    { month: "مرداد", income: 4300000, expenses: 3500000 },
-                  ]}
+                  data={monthlyCashFlowData}
                   margin={{
                     top: 5,
                     right: 30,
@@ -465,7 +477,7 @@ export default function FinWiseAIDashboard() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
-                  <Tooltip formatter={(value) => [`﷼${value.toLocaleString()}`, "مبلغ"]} />
+                  <Tooltip formatter={(value) => [`﷼${Number(value).toLocaleString('fa-IR')}`, "مبلغ"]} />
                   <Legend />
                   <Bar dataKey="income" fill="#06D6A0" name="درآمد" />
                   <Bar dataKey="expenses" fill="#FF6B6B" name="هزینه‌ها" />
@@ -503,12 +515,12 @@ export default function FinWiseAIDashboard() {
                       </TableCell>
                       <TableCell>{transaction.description}</TableCell>
                       <TableCell className={transaction.type === "درآمد" ? "text-green-600" : "text-red-600"}>
-                        {transaction.type === "درآمد" ? "+" : "-"}﷼{transaction.amount.toLocaleString()}
+                        {transaction.type === "درآمد" ? "+" : "-"}﷼{transaction.amount.toLocaleString('fa-IR')}
                       </TableCell>
                       <TableCell>
                         <Select 
-                          value={transaction.category_id?.toString() || ""}
-                          onValueChange={(value) => handleCategoryChange(transaction.id, parseInt(value))}
+                          value={transaction.category_id || ""}
+                          onValueChange={(value) => handleCategoryChange(transaction.id, value)}
                         >
                           <SelectTrigger className="w-[180px]">
                             <SelectValue placeholder="انتخاب دسته‌بندی" />
@@ -516,7 +528,7 @@ export default function FinWiseAIDashboard() {
                           <SelectContent>
                             <SelectItem value="">دسته‌بندی نشده</SelectItem>
                             {categories.map((category) => (
-                              <SelectItem key={category.id} value={category.id.toString()}>
+                              <SelectItem key={category.id} value={category.id}>
                                 {category.name}
                               </SelectItem>
                             ))}
