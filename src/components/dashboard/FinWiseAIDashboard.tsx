@@ -19,7 +19,7 @@ import {
   List, 
   Settings 
 } from "lucide-react";
-import { supabase } from '@/components/supabase-client';
+import { createClient } from '@supabase/supabase-js';
 
 // Types
 interface Transaction {
@@ -43,6 +43,11 @@ interface User {
   name: string;
   email: string;
 }
+
+// Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // API Functions
 const fetchTransactions = async (userId: string): Promise<Transaction[]> => {
