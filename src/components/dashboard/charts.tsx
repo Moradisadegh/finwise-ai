@@ -118,3 +118,4 @@ export default function Charts({ categories, transactions }: ChartsProps) {
       </Card>
     </div>
   );
+}
