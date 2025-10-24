@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import FinWiseAIDashboard from "@/components/dashboard/finwise-ai-dashboard";
+import FinWiseAIDashboard from "@/components/dashboard/FinWiseAIDashboard";
 
 export default function Home() {
   return (
