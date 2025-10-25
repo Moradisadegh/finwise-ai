@@ -9,7 +9,6 @@ export interface AuthState {
 }
 
 class AuthService {
-  // دریافت اطلاعات کاربر فعلی
   async getCurrentUser(): Promise<AuthState> {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -26,14 +25,12 @@ class AuthService {
     }
   }
 
-  // ثبت نام کاربر جدید
   async signup(email: string, password: string, name: string): Promise<{ 
     success: boolean; 
     message: string; 
     user?: User 
   }> {
     try {
-      // ثبت نام کاربر در Supabase
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -58,7 +55,6 @@ class AuthService {
         }
       }
 
-      // ایجاد پروفایل کاربر در جدول users
       await userService.createUserProfile(data.user, name)
 
       return { 
@@ -75,7 +71,6 @@ class AuthService {
     }
   }
 
-  // ورود کاربر
   async login(email: string, password: string): Promise<{ 
     success: boolean; 
     message: string; 
@@ -108,7 +103,6 @@ class AuthService {
     }
   }
 
-  // خروج کاربر
   async logout(): Promise<{ success: boolean; message: string }> {
     try {
       const { error } = await supabase.auth.signOut()
@@ -133,7 +127,6 @@ class AuthService {
     }
   }
 
-  // گوش دادن به تغییرات وضعیت احراز هویت
   onAuthStateChange(callback: (event: string, session: any) => void) {
     return supabase.auth.onAuthStateChange(callback)
   }
