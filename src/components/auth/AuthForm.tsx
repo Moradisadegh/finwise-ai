@@ -1,38 +1,56 @@
+// src/components/auth/AuthForm.tsx
 "use client";
 
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
-interface AuthFormProps {
-  onLogin: (email: string) => void;
-}
-
-export default function AuthForm({ onLogin }: AuthFormProps) {
+export default function AuthForm() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const { login, signup } = useAuth();
+  const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
 
-    // اعتبارسنجی ساده
-    if (!email || !password) {
-      setError("لطفاً تمام فیلدها را پر کنید");
-      return;
+    try {
+      if (isLogin) {
+        const result = await login(email, password);
+        if (result.success) {
+          router.push("/dashboard");
+        } else {
+          setError(result.message);
+        }
+      } else {
+        if (!name.trim()) {
+          setError("لطفاً نام خود را وارد کنید");
+          setIsLoading(false);
+          return;
+        }
+        
+        const result = await signup(email, password, name);
+        if (result.success) {
+          router.push("/dashboard");
+        } else {
+          setError(result.message);
+        }
+      }
+    } catch (err) {
+      setError("خطایی رخ داده است");
+    } finally {
+      setIsLoading(false);
     }
-
-    if (!isLogin && password !== confirmPassword) {
-      setError("رمز عبور و تکرار آن یکسان نیستند");
-      return;
-    }
-
-    // در یک سیستم واقعی اینجا باید API call انجام شود
-    onLogin(email);
   };
 
   return (
@@ -55,10 +73,22 @@ export default function AuthForm({ onLogin }: AuthFormProps) {
             </div>
           )}
           
+          {!isLogin && (
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-700">نام</div>
+              <Input
+                type="text"
+                placeholder="نام خود را وارد کنید"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required={!isLogin}
+              />
+            </div>
+          )}
+          
           <div className="space-y-2">
             <div className="text-sm font-medium text-gray-700">ایمیل</div>
             <Input
-              id="email"
               type="email"
               placeholder="your@email.com"
               value={email}
@@ -70,7 +100,6 @@ export default function AuthForm({ onLogin }: AuthFormProps) {
           <div className="space-y-2">
             <div className="text-sm font-medium text-gray-700">رمز عبور</div>
             <Input
-              id="password"
               type="password"
               placeholder="حداقل 6 کاراکتر"
               value={password}
@@ -79,22 +108,18 @@ export default function AuthForm({ onLogin }: AuthFormProps) {
             />
           </div>
           
-          {!isLogin && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-700">تکرار رمز عبور</div>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="رمز عبور خود را دوباره وارد کنید"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </div>
-          )}
-          
-          <Button type="submit" className="w-full">
-            {isLogin ? "ورود" : "ثبت نام"}
+          <Button 
+            type="submit" 
+            className="w-full"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <span>در حال پردازش...</span>
+            ) : isLogin ? (
+              "ورود"
+            ) : (
+              "ثبت نام"
+            )}
           </Button>
         </form>
         
