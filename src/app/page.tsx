@@ -4,7 +4,7 @@ import { useSession } from '@/context/SessionContext';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import FinWiseAIDashboard from '@/components/FinWiseAIDashboard';
+import FinWiseAIDashboard from '@/components/dashboard/FinWiseAIDashboard';
 
 export default function Home() {
   const { session, loading } = useSession();
