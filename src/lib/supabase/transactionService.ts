@@ -1,5 +1,5 @@
 // src/lib/transactionService.ts
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '@/lib/supabase/Client'
 
 export interface Transaction {
   id: string
