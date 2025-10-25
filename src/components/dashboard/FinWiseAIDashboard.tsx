@@ -60,7 +60,9 @@ import {
   DollarSign, 
   TrendingUp, 
   Calendar, 
-  LogOut 
+  LogOut,
+  Download,
+  FileText
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { categoryService, Category } from "@/lib/categoryService";
@@ -97,30 +99,34 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
   const loadData = async () => {
     if (!user) return;
     
-    // بارگذاری دسته‌بندی‌ها
-    const userCategories = await categoryService.getUserCategories(user.id);
-    setCategories(userCategories);
-    
-    // بارگذاری تراکنش‌ها
-    const userTransactions = await transactionService.getUserTransactions(user.id);
-    setTransactions(userTransactions);
-    
-    // بارگذاری خلاصه مالی
-    const summary = await transactionService.getUserFinancialSummary(user.id);
-    setTotalIncome(summary.totalIncome);
-    setTotalExpenses(summary.totalExpenses);
-    setNetSavings(summary.netSavings);
-    
-    // بارگذاری داده‌های نمودارها
-    const categoryData = await transactionService.getCategorySpendingData(user.id);
-    setCategorySpendingData(categoryData);
-    
-    const cashFlowData = await transactionService.getMonthlyCashFlowData(user.id);
-    setMonthlyCashFlowData(cashFlowData);
-    
-    // بارگذاری فایل‌های آپلود شده
-    const files = await fileService.getUserFiles(user.id);
-    setUploadedFiles(files);
+    try {
+      // بارگذاری دسته‌بندی‌ها
+      const userCategories = await categoryService.getUserCategories(user.id);
+      setCategories(userCategories);
+      
+      // بارگذاری تراکنش‌ها
+      const userTransactions = await transactionService.getUserTransactions(user.id);
+      setTransactions(userTransactions);
+      
+      // بارگذاری خلاصه مالی
+      const summary = await transactionService.getUserFinancialSummary(user.id);
+      setTotalIncome(summary.totalIncome);
+      setTotalExpenses(summary.totalExpenses);
+      setNetSavings(summary.netSavings);
+      
+      // بارگذاری داده‌های نمودارها
+      const categoryData = await transactionService.getCategorySpendingData(user.id);
+      setCategorySpendingData(categoryData);
+      
+      const cashFlowData = await transactionService.getMonthlyCashFlowData(user.id);
+      setMonthlyCashFlowData(cashFlowData);
+      
+      // بارگذاری فایل‌های آپلود شده
+      const files = await fileService.getUserFiles(user.id);
+      setUploadedFiles(files);
+    } catch (error) {
+      console.error("Error loading data:", error);
+    }
   };
 
   // Handle file upload
@@ -157,27 +163,34 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
 
   // Handle category change for transaction
   const handleCategoryChange = async (transactionId: string, categoryId: string) => {
-    const success = await transactionService.updateTransaction(transactionId, {
-      category_id: categoryId
-    });
+    if (!user) return;
     
-    if (success) {
-      // بروزرسانی تراکنش در state
-      setTransactions(prev => 
-        prev.map(t => 
-          t.id === transactionId 
-            ? { 
-                ...t, 
-                category_id: categoryId,
-                category: categories.find(c => c.id === categoryId) || undefined
-              } 
-            : t
-        )
-      );
+    try {
+      const success = await transactionService.updateTransaction(transactionId, {
+        category_id: categoryId
+      });
       
-      // بروزرسانی داده‌های نمودار
-      loadData();
-    } else {
+      if (success) {
+        // بروزرسانی تراکنش در state
+        setTransactions(prev => 
+          prev.map(t => 
+            t.id === transactionId 
+              ? { 
+                  ...t, 
+                  category_id: categoryId,
+                  category: categories.find(c => c.id === categoryId) || undefined
+                } 
+              : t
+          )
+        );
+        
+        // بروزرسانی داده‌های نمودار
+        loadData();
+      } else {
+        alert("خطا در بروزرسانی دسته‌بندی");
+      }
+    } catch (error) {
+      console.error("Error updating category:", error);
       alert("خطا در بروزرسانی دسته‌بندی");
     }
   };
@@ -186,49 +199,79 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
   const handleAddCategory = async () => {
     if (!user || !newCategoryName.trim()) return;
     
-    const newCategory = await categoryService.createCategory({
-      user_id: user.id,
-      name: newCategoryName.trim(),
-      color: newCategoryColor
-    });
-    
-    if (newCategory) {
-      setCategories(prev => [...prev, newCategory]);
-      setNewCategoryName("");
-      setNewCategoryColor("#3B82F6");
-      setIsAddingCategory(false);
-    } else {
+    try {
+      const newCategory = await categoryService.createCategory({
+        user_id: user.id,
+        name: newCategoryName.trim(),
+        color: newCategoryColor
+      });
+      
+      if (newCategory) {
+        setCategories(prev => [...prev, newCategory]);
+        setNewCategoryName("");
+        setNewCategoryColor("#3B82F6");
+        setIsAddingCategory(false);
+      } else {
+        alert("خطا در ایجاد دسته‌بندی");
+      }
+    } catch (error) {
+      console.error("Error creating category:", error);
       alert("خطا در ایجاد دسته‌بندی");
     }
   };
 
   // Delete category
   const handleDeleteCategory = async (categoryId: string) => {
-    const success = await categoryService.deleteCategory(categoryId);
-    
-    if (success) {
-      setCategories(prev => prev.filter(c => c.id !== categoryId));
-      // بروزرسانی تراکنش‌هایی که این دسته‌بندی را داشتند
-      setTransactions(prev => 
-        prev.map(t => 
-          t.category_id === categoryId 
-            ? { ...t, category_id: null, category: undefined } 
-            : t
-        )
-      );
-    } else {
+    try {
+      const success = await categoryService.deleteCategory(categoryId);
+      
+      if (success) {
+        setCategories(prev => prev.filter(c => c.id !== categoryId));
+        // بروزرسانی تراکنش‌هایی که این دسته‌بندی را داشتند
+        setTransactions(prev => 
+          prev.map(t => 
+            t.category_id === categoryId 
+              ? { ...t, category_id: null, category: undefined } 
+              : t
+          )
+        );
+      } else {
+        alert("خطا در حذف دسته‌بندی");
+      }
+    } catch (error) {
+      console.error("Error deleting category:", error);
       alert("خطا در حذف دسته‌بندی");
     }
   };
 
   // Delete file
   const handleDeleteFile = async (fileId: string, filePath: string) => {
-    const success = await fileService.deleteFile(fileId, filePath);
-    
-    if (success) {
-      setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
-    } else {
+    try {
+      const success = await fileService.deleteFile(fileId, filePath);
+      
+      if (success) {
+        setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
+      } else {
+        alert("خطا در حذف فایل");
+      }
+    } catch (error) {
+      console.error("Error deleting file:", error);
       alert("خطا در حذف فایل");
+    }
+  };
+
+  // Download file
+  const handleDownloadFile = async (filePath: string) => {
+    try {
+      const url = await fileService.getFileUrl(filePath);
+      if (url) {
+        window.open(url, '_blank');
+      } else {
+        alert("خطا در دریافت لینک دانلود");
+      }
+    } catch (error) {
+      console.error("Error downloading file:", error);
+      alert("خطا در دانلود فایل");
     }
   };
 
@@ -293,19 +336,22 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
                 <div className="space-y-2">
                   {uploadedFiles.map((file) => (
                     <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="font-medium">{file.file_name}</div>
-                        <div className="text-sm text-gray-500">
-                          {new Date(file.uploaded_at).toLocaleDateString('fa-IR')}
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-gray-500" />
+                        <div>
+                          <div className="font-medium">{file.file_name}</div>
+                          <div className="text-sm text-gray-500">
+                            {new Date(file.uploaded_at).toLocaleDateString('fa-IR')}
+                          </div>
                         </div>
                       </div>
                       <div className="flex gap-2">
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => window.open(fileService.getFileUrl(file.file_path) || '#', '_blank')}
+                          onClick={() => handleDownloadFile(file.file_path)}
                         >
-                          دانلود
+                          <Download className="h-4 w-4" />
                         </Button>
                         <Button 
                           variant="destructive" 
@@ -394,4 +440,176 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
           
           <Card>
             <CardHeader>
-              <CardTitle>جریان نقدی ماهانه</CardTitle
+              <CardTitle>جریان نقدی ماهانه</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={monthlyCashFlowData}
+                  margin={{
+                    top: 5,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`$${value}`, "مبلغ"]} />
+                  <Legend />
+                  <Bar dataKey="income" fill="#06D6A0" name="درآمد" />
+                  <Bar dataKey="expenses" fill="#FF6B6B" name="هزینه‌ها" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Transactions and Categories Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Transactions Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>تراکنش‌های اخیر</CardTitle>
+              <CardDescription>
+                دسته‌بندی تراکنش‌های مالی خود را مدیریت کنید
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>تاریخ</TableHead>
+                    <TableHead>شرح</TableHead>
+                    <TableHead>مبلغ</TableHead>
+                    <TableHead>دسته‌بندی</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transactions.map((transaction) => (
+                    <TableRow key={transaction.id}>
+                      <TableCell className="font-medium">
+                        {new Date(transaction.date).toLocaleDateString('fa-IR')}
+                      </TableCell>
+                      <TableCell>{transaction.description}</TableCell>
+                      <TableCell className={transaction.type === "income" ? "text-green-600" : "text-red-600"}>
+                        {transaction.type === "income" ? "+" : "-"}${transaction.amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <Select 
+                          value={transaction.category_id || ""}
+                          onValueChange={(value) => handleCategoryChange(transaction.id, value)}
+                        >
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="انتخاب دسته‌بندی" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">بدون دسته‌بندی</SelectItem>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Category Management */}
+          <Card>
+            <CardHeader>
+              <CardTitle>دسته‌بندی‌های هزینه</CardTitle>
+              <CardDescription>
+                دسته‌بندی‌های هزینه خود را مدیریت کنید
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-between mb-4">
+                <h3 className="text-lg font-semibold">دسته‌بندی‌های شما</h3>
+                <Dialog open={isAddingCategory} onOpenChange={setIsAddingCategory}>
+                  <DialogTrigger asChild>
+                    <Button size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      افزودن دسته‌بندی
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>افزودن دسته‌بندی جدید</DialogTitle>
+                      <DialogDescription>
+                        یک دسته‌بندی جدید برای تراکنش‌های خود ایجاد کنید
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                      <div>
+                        <label className="text-sm font-medium">نام دسته‌بندی</label>
+                        <Input
+                          placeholder="نام دسته‌بندی"
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium">رنگ</label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="color"
+                            value={newCategoryColor}
+                            onChange={(e) => setNewCategoryColor(e.target.value)}
+                            className="w-16 h-10 p-1"
+                          />
+                          <span>{newCategoryColor}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsAddingCategory(false)}>
+                        انصراف
+                      </Button>
+                      <Button onClick={handleAddCategory}>افزودن</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              
+              <div className="space-y-3">
+                {categories.map((category) => (
+                  <div 
+                    key={category.id} 
+                    className="flex items-center justify-between p-3 border rounded-lg"
+                  >
+                    <div className="flex items-center">
+                      <div 
+                        className="w-4 h-4 rounded-full mr-3" 
+                        style={{ backgroundColor: category.color }}
+                      ></div>
+                      <span>{category.name}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleDeleteCategory(category.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
