@@ -1,3 +1,4 @@
+// src/components/dashboard/FinWiseAIDashboard.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -51,157 +52,209 @@ import {
   Pie,
   Cell
 } from "recharts";
-import { Upload, Plus, Edit, Trash2, DollarSign, TrendingUp, Calendar, LogOut } from "lucide-react";
-
-// Types
-interface Transaction {
-  id: string;
-  date: string;
-  description: string;
-  amount: number;
-  type: "income" | "expense";
-  category: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  color: string;
-}
-
-// Mock data
-const initialCategories: Category[] = [
-  { id: "1", name: "غذا و رستوران", color: "#FF6B6B" },
-  { id: "2", name: "حمل و نقل", color: "#4ECDC4" },
-  { id: "3", name: "خرید", color: "#FFD166" },
-  { id: "4", name: "سرگرمی", color: "#6A0572" },
-  { id: "5", name: "هزینه‌های خانگی", color: "#1A535C" },
-  { id: "6", name: "درآمد", color: "#06D6A0" },
-];
-
-const initialTransactions: Transaction[] = [
-  { id: "1", date: "2023-05-15", description: "سوپرمارکت", amount: 85.30, type: "expense", category: "غذا و رستوران" },
-  { id: "2", date: "2023-05-14", description: "سوخت خودرو", amount: 45.00, type: "expense", category: "حمل و نقل" },
-  { id: "3", date: "2023-05-12", description: "حقوق ماهانه", amount: 3200.00, type: "income", category: "درآمد" },
-  { id: "4", date: "2023-05-10", description: "بلیط سینما", amount: 32.50, type: "expense", category: "سرگرمی" },
-  { id: "5", date: "2023-05-08", description: "قبض برق", amount: 120.75, type: "expense", category: "هزینه‌های خانگی" },
-  { id: "6", date: "2023-05-05", description: "خرید لباس", amount: 65.99, type: "expense", category: "خرید" },
-];
-
-const categorySpendingData = [
-  { name: "غذا و رستوران", value: 320 },
-  { name: "حمل و نقل", value: 180 },
-  { name: "خرید", value: 250 },
-  { name: "سرگرمی", value: 95 },
-  { name: "هزینه‌های خانگی", value: 120 },
-];
-
-const monthlyCashFlowData = [
-  { month: "فروردین", income: 4000, expenses: 2800 },
-  { month: "اردیبهشت", income: 4200, expenses: 3100 },
-  { month: "خرداد", income: 3800, expenses: 2900 },
-  { month: "تیر", income: 4100, expenses: 3200 },
-  { month: "مرداد", income: 4300, expenses: 3500 },
-];
+import { 
+  Upload, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  DollarSign, 
+  TrendingUp, 
+  Calendar, 
+  LogOut 
+} from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { categoryService, Category } from "@/lib/categoryService";
+import { transactionService, TransactionWithCategory } from "@/lib/transactionService";
+import { fileService, UploadedFile } from "@/lib/fileService";
 
 interface FinWiseAIDashboardProps {
-  onLogout: () => void;
+  onLogout?: () => void;
 }
 
 export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps) {
-  // State
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
+  const { user, userProfile } = useAuth();
+  const [transactions, setTransactions] = useState<TransactionWithCategory[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const [netSavings, setNetSavings] = useState(0);
+  const [categorySpendingData, setCategorySpendingData] = useState<{ name: string; value: number; color: string }[]>([]);
+  const [monthlyCashFlowData, setMonthlyCashFlowData] = useState<{ month: string; income: number; expenses: number }[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
-  // Calculate totals
+  // بارگذاری داده‌ها
   useEffect(() => {
-    const income = transactions
-      .filter(t => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
+    if (user) {
+      loadData();
+    }
+  }, [user]);
+
+  const loadData = async () => {
+    if (!user) return;
     
-    const expenses = transactions
-      .filter(t => t.type === "expense")
-      .reduce((sum, t) => sum + t.amount, 0);
+    // بارگذاری دسته‌بندی‌ها
+    const userCategories = await categoryService.getUserCategories(user.id);
+    setCategories(userCategories);
     
-    setTotalIncome(income);
-    setTotalExpenses(expenses);
-  }, [transactions]);
+    // بارگذاری تراکنش‌ها
+    const userTransactions = await transactionService.getUserTransactions(user.id);
+    setTransactions(userTransactions);
+    
+    // بارگذاری خلاصه مالی
+    const summary = await transactionService.getUserFinancialSummary(user.id);
+    setTotalIncome(summary.totalIncome);
+    setTotalExpenses(summary.totalExpenses);
+    setNetSavings(summary.netSavings);
+    
+    // بارگذاری داده‌های نمودارها
+    const categoryData = await transactionService.getCategorySpendingData(user.id);
+    setCategorySpendingData(categoryData);
+    
+    const cashFlowData = await transactionService.getMonthlyCashFlowData(user.id);
+    setMonthlyCashFlowData(cashFlowData);
+    
+    // بارگذاری فایل‌های آپلود شده
+    const files = await fileService.getUserFiles(user.id);
+    setUploadedFiles(files);
+  };
 
   // Handle file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-      setIsUploading(true);
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user || !e.target.files || !e.target.files[0]) return;
+    
+    const selectedFile = e.target.files[0];
+    setFile(selectedFile);
+    setIsUploading(true);
+    
+    try {
+      // آپلود فایل به Supabase
+      const uploadedFile = await fileService.uploadFile(selectedFile, user.id);
       
-      // Simulate file processing
-      setTimeout(() => {
-        setIsUploading(false);
-        alert("فایل با موفقیت پردازش شد!");
-      }, 1500);
+      if (uploadedFile) {
+        // بروزرسانی لیست فایل‌ها
+        setUploadedFiles(prev => [uploadedFile, ...prev]);
+        alert("فایل با موفقیت آپلود شد!");
+        
+        // در اینجا می‌توانید منطق پردازش فایل را اضافه کنید
+        // مثلاً پارس کردن فایل اکسل یا PDF و ایجاد تراکنش‌ها
+      } else {
+        alert("خطا در آپلود فایل");
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert("خطا در آپلود فایل");
+    } finally {
+      setIsUploading(false);
+      setFile(null);
+      if (e.target) e.target.value = ""; // ریست کردن input
     }
   };
 
   // Handle category change for transaction
-  const handleCategoryChange = (transactionId: string, categoryId: string) => {
-    setTransactions(prev => 
-      prev.map(t => 
-        t.id === transactionId 
-          ? { ...t, category: categories.find(c => c.id === categoryId)?.name || t.category } 
-          : t
-      )
-    );
+  const handleCategoryChange = async (transactionId: string, categoryId: string) => {
+    const success = await transactionService.updateTransaction(transactionId, {
+      category_id: categoryId
+    });
+    
+    if (success) {
+      // بروزرسانی تراکنش در state
+      setTransactions(prev => 
+        prev.map(t => 
+          t.id === transactionId 
+            ? { 
+                ...t, 
+                category_id: categoryId,
+                category: categories.find(c => c.id === categoryId) || undefined
+              } 
+            : t
+        )
+      );
+      
+      // بروزرسانی داده‌های نمودار
+      loadData();
+    } else {
+      alert("خطا در بروزرسانی دسته‌بندی");
+    }
   };
 
   // Add new category
-  const handleAddCategory = () => {
-    if (newCategoryName.trim()) {
-      const newCategory: Category = {
-        id: `${categories.length + 1}`,
-        name: newCategoryName.trim(),
-        color: `#${Math.floor(Math.random()*16777215).toString(16)}` // Random color
-      };
-      setCategories([...categories, newCategory]);
+  const handleAddCategory = async () => {
+    if (!user || !newCategoryName.trim()) return;
+    
+    const newCategory = await categoryService.createCategory({
+      user_id: user.id,
+      name: newCategoryName.trim(),
+      color: newCategoryColor
+    });
+    
+    if (newCategory) {
+      setCategories(prev => [...prev, newCategory]);
       setNewCategoryName("");
+      setNewCategoryColor("#3B82F6");
       setIsAddingCategory(false);
+    } else {
+      alert("خطا در ایجاد دسته‌بندی");
     }
   };
 
   // Delete category
-  const handleDeleteCategory = (categoryId: string) => {
-    setCategories(categories.filter(c => c.id !== categoryId));
-    // Reset transactions with this category to "Uncategorized"
-    setTransactions(prev => 
-      prev.map(t => 
-        t.category === categories.find(c => c.id === categoryId)?.name 
-          ? { ...t, category: "دسته‌بندی نشده" } 
-          : t
-      )
-    );
+  const handleDeleteCategory = async (categoryId: string) => {
+    const success = await categoryService.deleteCategory(categoryId);
+    
+    if (success) {
+      setCategories(prev => prev.filter(c => c.id !== categoryId));
+      // بروزرسانی تراکنش‌هایی که این دسته‌بندی را داشتند
+      setTransactions(prev => 
+        prev.map(t => 
+          t.category_id === categoryId 
+            ? { ...t, category_id: null, category: undefined } 
+            : t
+        )
+      );
+    } else {
+      alert("خطا در حذف دسته‌بندی");
+    }
   };
+
+  // Delete file
+  const handleDeleteFile = async (fileId: string, filePath: string) => {
+    const success = await fileService.deleteFile(fileId, filePath);
+    
+    if (success) {
+      setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
+    } else {
+      alert("خطا در حذف فایل");
+    }
+  };
+
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <header className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between">
+        <header className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">FinWise AI داشبورد</h1>
-            <p className="text-gray-600">مدیریت هوشمند مالی شخصی</p>
+            <h1 className="text-3xl font-bold text-gray-900">FinWise AI Dashboard</h1>
+            <p className="text-gray-600">
+              {userProfile ? `خوش آمدید، ${userProfile.full_name}` : "در حال بارگذاری..."}
+            </p>
           </div>
-          <Button 
-            variant="outline" 
-            onClick={onLogout}
-            className="mt-4 md:mt-0 flex items-center gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            خروج
-          </Button>
+          {onLogout && (
+            <Button 
+              variant="outline" 
+              onClick={onLogout}
+              className="flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              خروج
+            </Button>
+          )}
         </header>
 
         {/* File Upload Section */}
@@ -209,10 +262,10 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
-              بارگذاری صورت‌حساب بانکی
+              آپلود صورت‌حساب بانکی
             </CardTitle>
             <CardDescription>
-              فایل Excel یا PDF صورت‌حساب بانکی خود را بارگذاری کنید
+              فایل اکسل یا PDF صورت‌حساب بانکی خود را آپلود کنید
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -228,10 +281,45 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
                   <p className="mt-2 text-sm text-gray-500">در حال پردازش فایل...</p>
                 )}
               </div>
-              <Button disabled={isUploading}>
-                {isUploading ? "در حال پردازش..." : "بارگذاری"}
+              <Button disabled={isUploading || !file}>
+                {isUploading ? "در حال آپلود..." : "آپلود"}
               </Button>
             </div>
+            
+            {/* Uploaded Files List */}
+            {uploadedFiles.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-3">فایل‌های آپلود شده</h3>
+                <div className="space-y-2">
+                  {uploadedFiles.map((file) => (
+                    <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <div className="font-medium">{file.file_name}</div>
+                        <div className="text-sm text-gray-500">
+                          {new Date(file.uploaded_at).toLocaleDateString('fa-IR')}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => window.open(fileService.getFileUrl(file.file_path) || '#', '_blank')}
+                        >
+                          دانلود
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          onClick={() => handleDeleteFile(file.id, file.file_path)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -244,18 +332,18 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">${totalIncome.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">+12% نسبت به ماه گذشته</p>
+              <p className="text-xs text-muted-foreground">+12% از ماه گذشته</p>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">هزینه‌ها</CardTitle>
+              <CardTitle className="text-sm font-medium">هزینه‌های کل</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">${totalExpenses.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">+5% نسبت به ماه گذشته</p>
+              <p className="text-xs text-muted-foreground">+5% از ماه گذشته</p>
             </CardContent>
           </Card>
           
@@ -265,8 +353,8 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${(totalIncome - totalExpenses).toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">+18% نسبت به ماه گذشته</p>
+              <div className="text-2xl font-bold">${netSavings.toFixed(2)}</div>
+              <p className="text-xs text-muted-foreground">+18% از ماه گذشته</p>
             </CardContent>
           </Card>
         </div>
@@ -293,7 +381,7 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
                     {categorySpendingData.map((entry, index) => (
                       <Cell 
                         key={`cell-${index}`} 
-                        fill={categories.find(c => c.name === entry.name)?.color || "#8884d8"} 
+                        fill={entry.color || "#8884d8"} 
                       />
                     ))}
                   </Pie>
@@ -306,160 +394,4 @@ export default function FinWiseAIDashboard({ onLogout }: FinWiseAIDashboardProps
           
           <Card>
             <CardHeader>
-              <CardTitle>جریان نقدی ماهانه</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart
-                  data={monthlyCashFlowData}
-                  margin={{
-                    top: 5,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`$${value}`, "مبلغ"]} />
-                  <Legend />
-                  <Bar dataKey="income" fill="#06D6A0" name="درآمد" />
-                  <Bar dataKey="expenses" fill="#FF6B6B" name="هزینه‌ها" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Transactions and Categories Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Transactions Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>تراکنش‌های اخیر</CardTitle>
-              <CardDescription>
-                دسته‌بندی تراکنش‌های مالی خود را مدیریت کنید
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>تاریخ</TableHead>
-                    <TableHead>شرح</TableHead>
-                    <TableHead>مبلغ</TableHead>
-                    <TableHead>دسته‌بندی</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell className="font-medium">
-                        {new Date(transaction.date).toLocaleDateString("fa-IR")}
-                      </TableCell>
-                      <TableCell>{transaction.description}</TableCell>
-                      <TableCell className={transaction.type === "income" ? "text-green-600" : "text-red-600"}>
-                        {transaction.type === "income" ? "+" : "-"}${transaction.amount.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        <Select 
-                          value={categories.find(c => c.name === transaction.category)?.id || ""}
-                          onValueChange={(value) => handleCategoryChange(transaction.id, value)}
-                        >
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="انتخاب دسته‌بندی" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories.map((category) => (
-                              <SelectItem key={category.id} value={category.id}>
-                                {category.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          {/* Category Management */}
-          <Card>
-            <CardHeader>
-              <CardTitle>دسته‌بندی هزینه‌ها</CardTitle>
-              <CardDescription>
-                دسته‌بندی‌های هزینه خود را مدیریت کنید
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-between mb-4">
-                <h3 className="text-lg font-semibold">دسته‌بندی‌های شما</h3>
-                <Dialog open={isAddingCategory} onOpenChange={setIsAddingCategory}>
-                  <DialogTrigger asChild>
-                    <Button size="sm">
-                      <Plus className="h-4 w-4 mr-2" />
-                      افزودن دسته‌بندی
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>افزودن دسته‌بندی جدید</DialogTitle>
-                      <DialogDescription>
-                        یک دسته‌بندی جدید برای تراکنش‌های خود ایجاد کنید
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <Input
-                        placeholder="نام دسته‌بندی"
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                      />
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsAddingCategory(false)}>
-                        انصراف
-                      </Button>
-                      <Button onClick={handleAddCategory}>افزودن دسته‌بندی</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-              
-              <div className="space-y-3">
-                {categories.map((category) => (
-                  <div 
-                    key={category.id} 
-                    className="flex items-center justify-between p-3 border rounded-lg"
-                  >
-                    <div className="flex items-center">
-                      <div 
-                        className="w-4 h-4 rounded-full mr-3" 
-                        style={{ backgroundColor: category.color }}
-                      ></div>
-                      <span>{category.name}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleDeleteCategory(category.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-}
+              <CardTitle>جریان نقدی ماهانه</CardTitle
