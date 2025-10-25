@@ -1,7 +1,7 @@
 // src/lib/authService.ts
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '@/lib/supabase/Client'
 import { User } from '@supabase/supabase-js'
-import { userService } from '@/lib/userService'
+import { userService } from '@/lib/supabase/userService'
 
 export interface AuthState {
   user: User | null
