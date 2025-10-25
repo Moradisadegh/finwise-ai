@@ -12,13 +12,10 @@ export interface UploadedFile {
 }
 
 export class FileService {
-  // آپلود فایل
   async uploadFile(file: File, userId: string): Promise<UploadedFile | null> {
     try {
-      // ایجاد نام منحصر به فرد برای فایل
       const fileName = `${userId}/${Date.now()}_${file.name}`
       
-      // آپلود فایل به Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('bank-statements')
         .upload(fileName, file)
@@ -28,7 +25,6 @@ export class FileService {
         return null
       }
 
-      // ذخیره اطلاعات فایل در دیتابیس
       const { data, error } = await supabase
         .from('uploaded_files')
         .insert([
@@ -56,7 +52,6 @@ export class FileService {
     }
   }
 
-  // دریافت فایل‌های کاربر
   async getUserFiles(userId: string): Promise<UploadedFile[]> {
     try {
       const { data, error } = await supabase
@@ -77,10 +72,8 @@ export class FileService {
     }
   }
 
-  // حذف فایل
   async deleteFile(fileId: string, filePath: string): Promise<boolean> {
     try {
-      // حذف فایل از Storage
       const { error: storageError } = await supabase.storage
         .from('bank-statements')
         .remove([filePath])
@@ -90,7 +83,6 @@ export class FileService {
         return false
       }
 
-      // حذف رکورد از دیتابیس
       const { error: dbError } = await supabase
         .from('uploaded_files')
         .delete()
@@ -108,17 +100,11 @@ export class FileService {
     }
   }
 
-  // دریافت URL فایل برای دانلود
   async getFileUrl(filePath: string): Promise<string | null> {
     try {
-      const { data, error } = supabase.storage
+      const { data } = supabase.storage
         .from('bank-statements')
         .getPublicUrl(filePath)
-
-      if (error) {
-        console.error('Error getting file URL:', error)
-        return null
-      }
 
       return data.publicUrl
     } catch (error) {
