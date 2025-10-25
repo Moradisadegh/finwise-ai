@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 
 interface AuthFormProps {
   onLogin: (email: string) => void;
@@ -57,7 +56,7 @@ export default function AuthForm({ onLogin }: AuthFormProps) {
           )}
           
           <div className="space-y-2">
-            <Label htmlFor="email">ایمیل</Label>
+            <div className="text-sm font-medium text-gray-700">ایمیل</div>
             <Input
               id="email"
               type="email"
@@ -69,7 +68,7 @@ export default function AuthForm({ onLogin }: AuthFormProps) {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="password">رمز عبور</Label>
+            <div className="text-sm font-medium text-gray-700">رمز عبور</div>
             <Input
               id="password"
               type="password"
@@ -82,7 +81,7 @@ export default function AuthForm({ onLogin }: AuthFormProps) {
           
           {!isLogin && (
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">تکرار رمز عبور</Label>
+              <div className="text-sm font-medium text-gray-700">تکرار رمز عبور</div>
               <Input
                 id="confirmPassword"
                 type="password"
