@@ -21,7 +21,6 @@ export interface TransactionWithCategory extends Transaction {
 }
 
 export class TransactionService {
-  // دریافت تراکنش‌های کاربر
   async getUserTransactions(userId: string): Promise<TransactionWithCategory[]> {
     try {
       const { data, error } = await supabase
@@ -45,7 +44,6 @@ export class TransactionService {
     }
   }
 
-  // ایجاد تراکنش جدید
   async createTransaction(transaction: Omit<Transaction, 'id' | 'created_at'>): Promise<Transaction | null> {
     try {
       const { data, error } = await supabase
@@ -66,7 +64,6 @@ export class TransactionService {
     }
   }
 
-  // بروزرسانی تراکنش
   async updateTransaction(id: string, updates: Partial<Transaction>): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -86,7 +83,6 @@ export class TransactionService {
     }
   }
 
-  // حذف تراکنش
   async deleteTransaction(id: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -106,14 +102,12 @@ export class TransactionService {
     }
   }
 
-  // دریافت خلاصه مالی کاربر
   async getUserFinancialSummary(userId: string): Promise<{
     totalIncome: number
     totalExpenses: number
     netSavings: number
   }> {
     try {
-      // درآمدها
       const { data: incomeData, error: incomeError } = await supabase
         .from('transactions')
         .select('amount')
@@ -125,7 +119,6 @@ export class TransactionService {
         return { totalIncome: 0, totalExpenses: 0, netSavings: 0 }
       }
 
-      // هزینه‌ها
       const { data: expenseData, error: expenseError } = await supabase
         .from('transactions')
         .select('amount')
@@ -148,7 +141,6 @@ export class TransactionService {
     }
   }
 
-  // دریافت داده‌های نمودار دسته‌بندی‌ها
   async getCategorySpendingData(userId: string): Promise<{ name: string; value: number; color: string }[]> {
     try {
       const { data, error } = await supabase
@@ -166,7 +158,6 @@ export class TransactionService {
         return []
       }
 
-      // گروه‌بندی بر اساس دسته‌بندی
       const categoryMap: Record<string, { name: string; value: number; color: string }> = {}
       
       data?.forEach(transaction => {
@@ -190,7 +181,6 @@ export class TransactionService {
     }
   }
 
-  // دریافت داده‌های نمودار جریان نقدی ماهانه
   async getMonthlyCashFlowData(userId: string): Promise<{ month: string; income: number; expenses: number }[]> {
     try {
       const { data, error } = await supabase
@@ -204,7 +194,6 @@ export class TransactionService {
         return []
       }
 
-      // گروه‌بندی بر اساس ماه
       const monthMap: Record<string, { month: string; income: number; expenses: number }> = {}
       
       data?.forEach(transaction => {
