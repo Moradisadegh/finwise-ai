@@ -65,9 +65,9 @@ import {
   FileText
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { categoryService, Category } from "@/lib/categoryService";
-import { transactionService, TransactionWithCategory } from "@/lib/transactionService";
-import { fileService, UploadedFile } from "@/lib/fileService";
+import { categoryService, Category } from "@/lib/supabase/categoryService";
+import { transactionService, TransactionWithCategory } from "@/lib/supabase/transactionService";
+import { fileService, UploadedFile } from "@/lib/supabase/fileService";
 
 interface FinWiseAIDashboardProps {
   onLogout?: () => void;
