@@ -52,68 +52,83 @@ import {
   Cell
 } from "recharts";
 import { Upload, Plus, Edit, Trash2, DollarSign, TrendingUp } from "lucide-react";
+import { supabase } from '@/lib/supabaseClient';
 
 // Types
 interface Transaction {
-  id: string;
+  id: number;
   date: string;
   description: string;
   amount: number;
   type: "درآمد" | "هزینه";
-  category: string;
+  category_id: number;
+  category_name?: string;
+  category_color?: string;
 }
 
 interface Category {
-  id: string;
+  id: number;
   name: string;
   color: string;
 }
 
-// Mock data
-const initialCategories: Category[] = [
-  { id: "1", name: "غذا و رستوران", color: "#FF6B6B" },
-  { id: "2", name: "حمل و نقل", color: "#4ECDC4" },
-  { id: "3", name: "خرید", color: "#FFD166" },
-  { id: "4", name: "سرگرمی", color: "#6A0572" },
-  { id: "5", name: "خدمات عمومی", color: "#1A535C" },
-  { id: "6", name: "حقوق", color: "#06D6A0" },
-];
-
-const initialTransactions: Transaction[] = [
-  { id: "1", date: "2023-05-15", description: "سوپرمارکت", amount: 853000, type: "هزینه", category: "غذا و رستوران" },
-  { id: "2", date: "2023-05-14", description: "سوخت خودرو", amount: 450000, type: "هزینه", category: "حمل و نقل" },
-  { id: "3", date: "2023-05-12", description: "واریز حقوق", amount: 32000000, type: "درآمد", category: "حقوق" },
-  { id: "4", date: "2023-05-10", description: "بلیط سینما", amount: 325000, type: "هزینه", category: "سرگرمی" },
-  { id: "5", date: "2023-05-08", description: "قبض برق", amount: 1207500, type: "هزینه", category: "خدمات عمومی" },
-  { id: "6", date: "2023-05-05", description: "خرید لباس", amount: 659900, type: "هزینه", category: "خرید" },
-];
-
-const categorySpendingData = [
-  { name: "غذا و رستوران", value: 3200000 },
-  { name: "حمل و نقل", value: 1800000 },
-  { name: "خرید", value: 2500000 },
-  { name: "سرگرمی", value: 950000 },
-  { name: "خدمات عمومی", value: 1200000 },
-];
-
-const monthlyCashFlowData = [
-  { month: "فروردین", income: 40000000, expenses: 28000000 },
-  { month: "اردیبهشت", income: 42000000, expenses: 31000000 },
-  { month: "خرداد", income: 38000000, expenses: 29000000 },
-  { month: "تیر", income: 41000000, expenses: 32000000 },
-  { month: "مرداد", income: 43000000, expenses: 35000000 },
-];
-
 export default function FinWiseAIDashboard() {
   // State
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Fetch user and data on component mount
+  useEffect(() => {
+    const fetchUserAndData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        await fetchData(user.id);
+      }
+    };
+
+    fetchUserAndData();
+  }, []);
+
+  // Fetch data from database
+  const fetchData = async (userId: string) => {
+    // Fetch categories
+    const { data: categoriesData, error: categoriesError } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (!categoriesError && categoriesData) {
+      setCategories(categoriesData);
+    }
+
+    // Fetch transactions with category info
+    const { data: transactionsData, error: transactionsError } = await supabase
+      .from('transactions')
+      .select(`
+        *,
+        categories (name, color)
+      `)
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+      .limit(10);
+    
+    if (!transactionsError && transactionsData) {
+      const formattedTransactions = transactionsData.map(t => ({
+        ...t,
+        category_name: t.categories?.name,
+        category_color: t.categories?.color
+      }));
+      setTransactions(formattedTransactions);
+    }
+  };
 
   // Calculate totals
   useEffect(() => {
@@ -130,12 +145,13 @@ export default function FinWiseAIDashboard() {
   }, [transactions]);
 
   // Handle file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && userId) {
       setFile(e.target.files[0]);
       setIsUploading(true);
       
-      // Simulate file processing
+      // In a real app, you would parse the file and insert transactions
+      // For now, we'll just simulate
       setTimeout(() => {
         setIsUploading(false);
         alert("فایل با موفقیت پردازش شد!");
@@ -144,41 +160,69 @@ export default function FinWiseAIDashboard() {
   };
 
   // Handle category change for transaction
-  const handleCategoryChange = (transactionId: string, categoryId: string) => {
-    setTransactions(prev => 
-      prev.map(t => 
-        t.id === transactionId 
-          ? { ...t, category: categories.find(c => c.id === categoryId)?.name || t.category } 
-          : t
-      )
-    );
+  const handleCategoryChange = async (transactionId: number, categoryId: number) => {
+    if (!userId) return;
+    
+    const { error } = await supabase
+      .from('transactions')
+      .update({ category_id: categoryId })
+      .eq('id', transactionId)
+      .eq('user_id', userId);
+    
+    if (!error) {
+      setTransactions(prev => 
+        prev.map(t => 
+          t.id === transactionId 
+            ? { ...t, category_id: categoryId } 
+            : t
+        )
+      );
+    }
   };
 
   // Add new category
-  const handleAddCategory = () => {
-    if (newCategoryName.trim()) {
-      const newCategory: Category = {
-        id: `${categories.length + 1}`,
-        name: newCategoryName.trim(),
-        color: `#${Math.floor(Math.random()*16777215).toString(16)}` // Random color
-      };
-      setCategories([...categories, newCategory]);
-      setNewCategoryName("");
-      setIsAddingCategory(false);
+  const handleAddCategory = async () => {
+    if (newCategoryName.trim() && userId) {
+      const { data, error } = await supabase
+        .from('categories')
+        .insert([
+          { 
+            name: newCategoryName.trim(),
+            color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+            user_id: userId
+          }
+        ])
+        .select();
+      
+      if (!error && data) {
+        setCategories([...categories, data[0]]);
+        setNewCategoryName("");
+        setIsAddingCategory(false);
+      }
     }
   };
 
   // Delete category
-  const handleDeleteCategory = (categoryId: string) => {
-    setCategories(categories.filter(c => c.id !== categoryId));
-    // Reset transactions with this category to "دسته‌بندی نشده"
-    setTransactions(prev => 
-      prev.map(t => 
-        t.category === categories.find(c => c.id === categoryId)?.name 
-          ? { ...t, category: "دسته‌بندی نشده" } 
-          : t
-      )
-    );
+  const handleDeleteCategory = async (categoryId: number) => {
+    if (!userId) return;
+    
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', categoryId)
+      .eq('user_id', userId);
+    
+    if (!error) {
+      setCategories(categories.filter(c => c.id !== categoryId));
+      // Reset transactions with this category
+      setTransactions(prev => 
+        prev.map(t => 
+          t.category_id === categoryId 
+            ? { ...t, category_id: 0 } 
+            : t
+        )
+      );
+    }
   };
 
   // Format currency for Persian
@@ -186,13 +230,68 @@ export default function FinWiseAIDashboard() {
     return new Intl.NumberFormat('fa-IR').format(amount) + ' ریال';
   };
 
+  // Prepare data for charts
+  const categorySpendingData = categories.map(category => {
+    const categoryTransactions = transactions.filter(
+      t => t.category_id === category.id && t.type === "هزینه"
+    );
+    
+    const total = categoryTransactions.reduce((sum, t) => sum + t.amount, 0);
+    
+    return {
+      name: category.name,
+      value: total
+    };
+  }).filter(item => item.value > 0);
+
+  // Mock monthly data - in a real app, this would come from the database
+  const monthlyCashFlowData = [
+    { month: "فروردین", income: 40000000, expenses: 28000000 },
+    { month: "اردیبهشت", income: 42000000, expenses: 31000000 },
+    { month: "خرداد", income: 38000000, expenses: 29000000 },
+    { month: "تیر", income: 41000000, expenses: 32000000 },
+    { month: "مرداد", income: 43000000, expenses: 35000000 },
+  ];
+
+  if (!userId) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>ورود به FinWise AI</CardTitle>
+            <CardDescription>
+              برای استفاده از داشبورد مالی، وارد حساب کاربری خود شوید
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button className="w-full" onClick={() => supabase.auth.signInWithOAuth({
+              provider: 'google',
+            })}>
+              ورود با گوگل
+            </Button>
+            <Button className="w-full" variant="outline" onClick={() => supabase.auth.signInWithOAuth({
+              provider: 'github',
+            })}>
+              ورود با گیت‌هاب
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">داشبورد FinWise AI</h1>
-          <p className="text-gray-600">مدیریت هوشمند مالی شخصی</p>
+        <header className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">داشبورد FinWise AI</h1>
+            <p className="text-gray-600">مدیریت هوشمند مالی شخصی</p>
+          </div>
+          <Button variant="outline" onClick={() => supabase.auth.signOut()}>
+            خروج
+          </Button>
         </header>
 
         {/* File Upload Section */}
@@ -355,15 +454,15 @@ export default function FinWiseAIDashboard() {
                       </TableCell>
                       <TableCell>
                         <Select 
-                          value={categories.find(c => c.name === transaction.category)?.id || ""}
-                          onValueChange={(value) => handleCategoryChange(transaction.id, value)}
+                          value={transaction.category_id?.toString() || ""}
+                          onValueChange={(value) => handleCategoryChange(transaction.id, parseInt(value))}
                         >
                           <SelectTrigger className="w-[180px]">
                             <SelectValue placeholder="انتخاب دسته‌بندی" />
                           </SelectTrigger>
                           <SelectContent>
                             {categories.map((category) => (
-                              <SelectItem key={category.id} value={category.id}>
+                              <SelectItem key={category.id} value={category.id.toString()}>
                                 {category.name}
                               </SelectItem>
                             ))}
