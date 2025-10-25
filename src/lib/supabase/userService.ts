@@ -1,5 +1,5 @@
 // src/lib/userService.ts
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '@/lib/supabase/Client'
 import { User } from '@supabase/supabase-js'
 
 export interface UserProfile {
