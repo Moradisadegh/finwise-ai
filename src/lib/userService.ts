@@ -1,96 +1,78 @@
-// src/lib/categoryService.ts
+// src/lib/userService.ts
 import { supabase } from '@/lib/supabaseClient'
+import { User } from '@supabase/supabase-js'
 
-export interface Category {
+export interface UserProfile {
   id: string
-  user_id: string
-  name: string
-  color: string
+  email: string
+  full_name: string
   created_at: string
 }
 
-export class CategoryService {
-  // دریافت دسته‌بندی‌های کاربر
-  async getUserCategories(userId: string): Promise<Category[]> {
+export class UserService {
+  async getUserProfile(userId: string): Promise<UserProfile | null> {
     try {
       const { data, error } = await supabase
-        .from('categories')
+        .from('users')
         .select('*')
-        .eq('user_id', userId)
-        .order('name')
-
-      if (error) {
-        console.error('Error fetching categories:', error)
-        return []
-      }
-
-      return data || []
-    } catch (error) {
-      console.error('Error in getUserCategories:', error)
-      return []
-    }
-  }
-
-  // ایجاد دسته‌بندی جدید
-  async createCategory(category: Omit<Category, 'id' | 'created_at'>): Promise<Category | null> {
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .insert([category])
-        .select()
+        .eq('id', userId)
         .single()
 
       if (error) {
-        console.error('Error creating category:', error)
+        console.error('Error fetching user profile:', error)
         return null
       }
 
       return data
     } catch (error) {
-      console.error('Error in createCategory:', error)
+      console.error('Error in getUserProfile:', error)
       return null
     }
   }
 
-  // بروزرسانی دسته‌بندی
-  async updateCategory(id: string, updates: Partial<Category>): Promise<boolean> {
+  async createUserProfile(user: User, fullName: string): Promise<boolean> {
     try {
       const { error } = await supabase
-        .from('categories')
-        .update(updates)
-        .eq('id', id)
+        .from('users')
+        .insert([
+          {
+            id: user.id,
+            email: user.email,
+            full_name: fullName,
+            created_at: new Date().toISOString()
+          }
+        ])
 
       if (error) {
-        console.error('Error updating category:', error)
+        console.error('Error creating user profile:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in updateCategory:', error)
+      console.error('Error in createUserProfile:', error)
       return false
     }
   }
 
-  // حذف دسته‌بندی
-  async deleteCategory(id: string): Promise<boolean> {
+  async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<boolean> {
     try {
       const { error } = await supabase
-        .from('categories')
-        .delete()
-        .eq('id', id)
+        .from('users')
+        .update(updates)
+        .eq('id', userId)
 
       if (error) {
-        console.error('Error deleting category:', error)
+        console.error('Error updating user profile:', error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error('Error in deleteCategory:', error)
+      console.error('Error in updateUserProfile:', error)
       return false
     }
   }
 }
 
-export const categoryService = new CategoryService()
+export const userService = new UserService()
