@@ -1,5 +1,5 @@
 // src/lib/categoryService.ts
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '@/lib/supabase/Client'
 
 export interface Category {
   id: string
