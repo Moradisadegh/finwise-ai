@@ -1,5 +1,5 @@
 // src/lib/fileService.ts
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '@/lib/supabase/Client'
 
 export interface UploadedFile {
   id: string
