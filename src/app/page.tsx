@@ -16,6 +16,7 @@ export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [error, setError] = useState('');
 
   // بررسی وضعیت کاربر
   useEffect(() => {
@@ -29,39 +30,63 @@ export default function Home() {
     };
     
     getUser();
+    
+    // گوش دادن به تغییرات احراز هویت
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+      if (session?.user) {
+        router.push('/dashboard');
+      }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [supabase, router]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
         
         if (error) throw error;
-        alert('ثبت نام با موفقیت انجام شد. لطفا ایمیل خود را برای تأیید بررسی کنید.');
+        
+        if (data.user) {
+          alert('ثبت نام با موفقیت انجام شد. لطفا ایمیل خود را برای تأیید بررسی کنید.');
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         
         if (error) throw error;
-        router.push('/dashboard');
+        
+        if (data.user) {
+          router.push('/dashboard');
+        }
       }
-    } catch (error: any) {
-      alert(error.message);
+    } catch (err: any) {
+      console.error('Auth error:', err);
+      setError(err.message || 'خطایی در احراز هویت رخ داده است');
     } finally {
       setLoading(false);
     }
   };
 
   if (user) {
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>در حال هدایت به داشبورد...</p>
+      </div>
+    );
   }
 
   return (
@@ -84,6 +109,12 @@ export default function Home() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {error && (
+                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+                  {error}
+                </div>
+              )}
+              
               <form onSubmit={handleAuth} className="space-y-4">
                 <div>
                   <Input
@@ -111,7 +142,10 @@ export default function Home() {
               <div className="mt-4 text-center">
                 <Button 
                   variant="link" 
-                  onClick={() => setIsSignUp(!isSignUp)}
+                  onClick={() => {
+                    setIsSignUp(!isSignUp);
+                    setError('');
+                  }}
                   className="p-0 h-auto"
                 >
                   {isSignUp 
