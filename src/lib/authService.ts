@@ -1,5 +1,5 @@
 // src/lib/authService.ts
-import { supabase } from '@/lib/supabase/Client'
+import { supabase } from '@/lib/supabase/client'
 import { User } from '@supabase/supabase-js'
 import { userService } from '@/lib/supabase/userService'
 
