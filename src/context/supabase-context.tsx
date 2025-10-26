@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, ReactNode } from 'react';
-import { supabase } from '@/lib/supabase/Client';
+import { supabase } from '@/lib/supabase/client';
 
 interface SupabaseContextType {
   supabase: typeof supabase;
