@@ -15,7 +15,6 @@ import {
   TableCell, 
   TableHead, 
   TableHeader, 
-  TableHeadRow,
   TableRow 
 } from "@/components/ui/table";
 import { 
@@ -57,7 +56,7 @@ import { Upload, Plus, Edit, Trash2, DollarSign, TrendingUp, Calendar } from "lu
 import { useAuth } from "@/context/AuthContext";
 import { categoryService, Category } from "@/lib/supabase/categoryService";
 import { transactionService, Transaction } from "@/lib/supabase/transactionService";
-import { fileService, FinancialFile } from "@/lib/supabase/fileService";
+import { fileService } from "@/lib/supabase/fileService";
 
 // Types
 interface SpendingData {
@@ -154,7 +153,9 @@ export default function FinWiseAIDashboard() {
     } finally {
       setIsUploading(false);
       // Reset file input
-      e.target.value = "";
+      if (e.target) {
+        e.target.value = "";
+      }
     }
   };
 
@@ -249,6 +250,14 @@ export default function FinWiseAIDashboard() {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg">Please log in to access the dashboard</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
@@ -276,13 +285,13 @@ export default function FinWiseAIDashboard() {
                   type="file" 
                   accept=".xlsx,.xls,.pdf" 
                   onChange={handleFileUpload}
-                  disabled={isUploading || !user}
+                  disabled={isUploading}
                 />
                 {isUploading && (
                   <p className="mt-2 text-sm text-gray-500">Processing your file...</p>
                 )}
               </div>
-              <Button disabled={isUploading || !user || !file}>
+              <Button disabled={isUploading || !file}>
                 {isUploading ? "Processing..." : "Upload"}
               </Button>
             </div>
@@ -402,12 +411,12 @@ export default function FinWiseAIDashboard() {
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableHeadRow>
+                  <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Category</TableHead>
-                  </TableHeadRow>
+                  </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transactions.map((transaction) => (
@@ -456,7 +465,7 @@ export default function FinWiseAIDashboard() {
                 <h3 className="text-lg font-semibold">Your Categories</h3>
                 <Dialog open={isAddingCategory} onOpenChange={setIsAddingCategory}>
                   <DialogTrigger asChild>
-                    <Button size="sm" disabled={!user}>
+                    <Button size="sm">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Category
                     </Button>
@@ -508,7 +517,6 @@ export default function FinWiseAIDashboard() {
                         variant="ghost" 
                         size="sm"
                         onClick={() => handleDeleteCategory(category.id)}
-                        disabled={!user}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
