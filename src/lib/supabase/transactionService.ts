@@ -12,6 +12,12 @@ export interface Transaction {
   created_at: string
 }
 
+// اضافه کردن این interface
+export interface TransactionWithCategory extends Transaction {
+  category_name?: string
+  category_color?: string
+}
+
 class TransactionService {
   async getTransactions(userId: string): Promise<Transaction[]> {
     try {
