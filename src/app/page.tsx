@@ -3,29 +3,29 @@
 import React, { useState, useEffect } from 'react';
 import { useSupabase } from '@/context/supabase-context';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
-import { TrendingUp, PieChart, Shield } from "lucide-react";
+import { TrendingUp, PieChart, Shield, Mail, Chrome } from "lucide-react";
 
 export default function Home() {
   const { supabase } = useSupabase();
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [error, setError] = useState('');
 
   // بررسی وضعیت کاربر
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      
-      if (user) {
-        router.push('/dashboard');
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        setUser(user);
+        
+        if (user) {
+          router.push('/dashboard');
+        }
+      } catch (err) {
+        console.error('Error getting user:', err);
       }
     };
     
@@ -44,41 +44,31 @@ export default function Home() {
     };
   }, [supabase, router]);
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    
+  const handleGoogleSignIn = async () => {
     try {
-      if (isSignUp) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        
-        if (error) throw error;
-        
-        if (data.user) {
-          alert('ثبت نام با موفقیت انجام شد. لطفا ایمیل خود را برای تأیید بررسی کنید.');
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: typeof window !== 'undefined' 
+            ? `${window.location.origin}/auth/callback` 
+            : 'http://localhost:3000/auth/callback'
         }
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        
-        if (error) throw error;
-        
-        if (data.user) {
-          router.push('/dashboard');
-        }
+      });
+      
+      if (error) throw error;
+      
+      // هدایت به صفحه احراز هویت گوگل
+      if (data?.url) {
+        window.location.href = data.url;
       }
     } catch (err: any) {
-      console.error('Auth error:', err);
-      setError(err.message || 'خطایی در احراز هویت رخ داده است');
-    } finally {
-      setLoading(false);
+      console.error('Google sign-in error:', err);
+      setError(err.message || 'خطایی در ورود با گوگل رخ داده است');
     }
+  };
+
+  const handleEmailSignIn = () => {
+    router.push('/auth/email');
   };
 
   if (user) {
@@ -101,11 +91,9 @@ export default function Home() {
         <div className="max-w-md w-full">
           <Card>
             <CardHeader>
-              <CardTitle>{isSignUp ? 'ثبت نام' : 'ورود'}</CardTitle>
+              <CardTitle>ورود به حساب کاربری</CardTitle>
               <CardDescription>
-                {isSignUp 
-                  ? 'حساب کاربری خود را ایجاد کنید' 
-                  : 'وارد حساب کاربری خود شوید'}
+                با یکی از روش‌های زیر وارد شوید
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -115,42 +103,33 @@ export default function Home() {
                 </div>
               )}
               
-              <form onSubmit={handleAuth} className="space-y-4">
-                <div>
-                  <Input
-                    type="email"
-                    placeholder="ایمیل"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <Input
-                    type="password"
-                    placeholder="رمز عبور"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'در حال پردازش...' : (isSignUp ? 'ثبت نام' : 'ورود')}
-                </Button>
-              </form>
-              
-              <div className="mt-4 text-center">
+              <div className="space-y-4">
                 <Button 
-                  variant="link" 
-                  onClick={() => {
-                    setIsSignUp(!isSignUp);
-                    setError('');
-                  }}
-                  className="p-0 h-auto"
+                  onClick={handleGoogleSignIn}
+                  className="w-full flex items-center gap-2"
+                  variant="outline"
                 >
-                  {isSignUp 
-                    ? 'حساب کاربری دارید؟ ورود' 
-                    : 'حساب کاربری ندارید؟ ثبت نام'}
+                  <Chrome className="h-5 w-5" />
+                  ورود با گوگل
+                </Button>
+                
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-300"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white text-gray-500">
+                      یا
+                    </span>
+                  </div>
+                </div>
+                
+                <Button 
+                  onClick={handleEmailSignIn}
+                  className="w-full flex items-center gap-2"
+                >
+                  <Mail className="h-5 w-5" />
+                  ورود با ایمیل
                 </Button>
               </div>
             </CardContent>
