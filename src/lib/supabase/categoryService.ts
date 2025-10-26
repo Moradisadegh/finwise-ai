@@ -1,22 +1,22 @@
-// src/lib/categoryService.ts
-import { supabase } from '@/lib/supabase/Client'
+// src/lib/supabase/categoryService.ts
+import { supabase } from './client'
 
 export interface Category {
   id: string
-  user_id: string
   name: string
   color: string
+  user_id: string
   created_at: string
 }
 
-export class CategoryService {
-  async getUserCategories(userId: string): Promise<Category[]> {
+class CategoryService {
+  async getCategories(userId: string): Promise<Category[]> {
     try {
       const { data, error } = await supabase
         .from('categories')
         .select('*')
         .eq('user_id', userId)
-        .order('name')
+        .order('created_at', { ascending: true })
 
       if (error) {
         console.error('Error fetching categories:', error)
@@ -25,7 +25,7 @@ export class CategoryService {
 
       return data || []
     } catch (error) {
-      console.error('Error in getUserCategories:', error)
+      console.error('Error in getCategories:', error)
       return []
     }
   }
