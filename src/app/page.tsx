@@ -1,93 +1,169 @@
 "use client";
 
-import React from 'react';
-import { useAuth } from '@/context/auth-context';
+import React, { useState, useEffect } from 'react';
+import { useSupabase } from '@/context/supabase-context';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
+import { TrendingUp, PieChart, Shield } from "lucide-react";
 
 export default function Home() {
-  const { isAuthenticated, login } = useAuth();
+  const { supabase } = useSupabase();
   const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
-  const handleGetStarted = () => {
-    if (!isAuthenticated) {
-      login();
+  // بررسی وضعیت کاربر
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      
+      if (user) {
+        router.push('/dashboard');
+      }
+    };
+    
+    getUser();
+  }, [supabase, router]);
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        
+        if (error) throw error;
+        alert('ثبت نام با موفقیت انجام شد. لطفا ایمیل خود را برای تأیید بررسی کنید.');
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        
+        if (error) throw error;
+        router.push('/dashboard');
+      }
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
     }
-    router.push('/dashboard');
   };
 
+  if (user) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col" dir="rtl">
       <header className="py-6 px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900">FinWise AI</h1>
-          {isAuthenticated ? (
-            <Button onClick={() => router.push('/dashboard')}>Dashboard</Button>
-          ) : (
-            <Button onClick={handleGetStarted}>Get Started</Button>
-          )}
         </div>
       </header>
 
       <main className="flex-grow flex flex-col items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
-        <div className="max-w-3xl w-full text-center">
-          <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
-            AI-Powered Personal Finance
-          </h1>
-          <p className="mt-6 text-xl text-gray-500">
-            Take control of your finances with intelligent insights and automated categorization
-          </p>
+        <div className="max-w-md w-full">
+          <Card>
+            <CardHeader>
+              <CardTitle>{isSignUp ? 'ثبت نام' : 'ورود'}</CardTitle>
+              <CardDescription>
+                {isSignUp 
+                  ? 'حساب کاربری خود را ایجاد کنید' 
+                  : 'وارد حساب کاربری خود شوید'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAuth} className="space-y-4">
+                <div>
+                  <Input
+                    type="email"
+                    placeholder="ایمیل"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Input
+                    type="password"
+                    placeholder="رمز عبور"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? 'در حال پردازش...' : (isSignUp ? 'ثبت نام' : 'ورود')}
+                </Button>
+              </form>
+              
+              <div className="mt-4 text-center">
+                <Button 
+                  variant="link" 
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  className="p-0 h-auto"
+                >
+                  {isSignUp 
+                    ? 'حساب کاربری دارید؟ ورود' 
+                    : 'حساب کاربری ندارید؟ ثبت نام'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
           
-          <div className="mt-10">
-            <Button 
-              size="lg" 
-              onClick={handleGetStarted}
-              className="text-lg px-8 py-3"
-            >
-              Get Started
-            </Button>
+          <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            <Card>
+              <CardHeader>
+                <TrendingUp className="h-8 w-8 text-blue-500 mb-2" />
+                <CardTitle>دسته‌بندی هوشمند</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  تراکنش‌های خود را به‌صورت خودکار با الگوریتم‌های هوش مصنوعی دسته‌بندی کنید
+                </CardDescription>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <PieChart className="h-8 w-8 text-green-500 mb-2" />
+                <CardTitle>بینش‌های مالی</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  بینش‌های قابل اقدام برای بهبود عادت‌های مالی خود دریافت کنید
+                </CardDescription>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <Shield className="h-8 w-8 text-purple-500 mb-2" />
+                <CardTitle>امن و خصوصی</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  داده‌های مالی شما رمزگذاری شده و هرگز با اشخاص ثالث به اشتراک گذاشته نمی‌شود
+                </CardDescription>
+              </CardContent>
+            </Card>
           </div>
-        </div>
-
-        <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>Smart Categorization</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Automatically categorize your transactions with AI-powered algorithms
-              </CardDescription>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Financial Insights</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Get actionable insights to improve your spending habits
-              </CardDescription>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Secure & Private</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Your financial data is encrypted and never shared with third parties
-              </CardDescription>
-            </CardContent>
-          </Card>
         </div>
       </main>
 
       <footer className="py-8 text-center text-gray-500 text-sm">
-        <p>© {new Date().getFullYear()} FinWise AI. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} FinWise AI. تمامی حقوق محفوظ است.</p>
       </footer>
     </div>
   );
