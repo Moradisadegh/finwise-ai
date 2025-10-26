@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useAuth } from '@/context/auth-context';
-import { useRouter } from 'next/navigation';
+import { useSupabase } from '@/context/supabase-context';
 import { 
   Card, 
   CardContent, 
@@ -53,16 +52,17 @@ import {
   Pie,
   Cell
 } from "recharts";
-import { Upload, Plus, Edit, Trash2, DollarSign, TrendingUp, Calendar, LogOut } from "lucide-react";
+import { Upload, Plus, Edit, Trash2, TrendingUp, Calendar, LogOut } from "lucide-react";
 
 // Types
 interface Transaction {
   id: string;
   date: string;
   description: string;
-  amount: number;
+  amount: number; // به ریال
   type: "income" | "expense";
-  category: string;
+  category_id: string | null;
+  category?: Category;
 }
 
 interface Category {
@@ -71,48 +71,18 @@ interface Category {
   color: string;
 }
 
-// Mock data
-const initialCategories: Category[] = [
-  { id: "1", name: "Food & Dining", color: "#FF6B6B" },
-  { id: "2", name: "Transportation", color: "#4ECDC4" },
-  { id: "3", name: "Shopping", color: "#FFD166" },
-  { id: "4", name: "Entertainment", color: "#6A0572" },
-  { id: "5", name: "Utilities", color: "#1A535C" },
-  { id: "6", name: "Salary", color: "#06D6A0" },
-];
-
-const initialTransactions: Transaction[] = [
-  { id: "1", date: "2023-05-15", description: "Grocery Store", amount: 85.30, type: "expense", category: "Food & Dining" },
-  { id: "2", date: "2023-05-14", description: "Gas Station", amount: 45.00, type: "expense", category: "Transportation" },
-  { id: "3", date: "2023-05-12", description: "Salary Deposit", amount: 3200.00, type: "income", category: "Salary" },
-  { id: "4", date: "2023-05-10", description: "Movie Tickets", amount: 32.50, type: "expense", category: "Entertainment" },
-  { id: "5", date: "2023-05-08", description: "Electricity Bill", amount: 120.75, type: "expense", category: "Utilities" },
-  { id: "6", date: "2023-05-05", description: "Online Shopping", amount: 65.99, type: "expense", category: "Shopping" },
-];
-
-const categorySpendingData = [
-  { name: "Food & Dining", value: 320 },
-  { name: "Transportation", value: 180 },
-  { name: "Shopping", value: 250 },
-  { name: "Entertainment", value: 95 },
-  { name: "Utilities", value: 120 },
-];
-
-const monthlyCashFlowData = [
-  { month: "Jan", income: 4000, expenses: 2800 },
-  { month: "Feb", income: 4200, expenses: 3100 },
-  { month: "Mar", income: 3800, expenses: 2900 },
-  { month: "Apr", income: 4100, expenses: 3200 },
-  { month: "May", income: 4300, expenses: 3500 },
-];
+// تابع برای فرمت کردن اعداد به فرمت ریال
+const formatRial = (amount: number): string => {
+  return new Intl.NumberFormat('fa-IR').format(amount) + ' ریال';
+};
 
 export default function DashboardPage() {
-  const { isAuthenticated, logout } = useAuth();
-  const router = useRouter();
+  const { supabase } = useSupabase();
+  const [user, setUser] = useState<any>(null);
   
   // State
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -120,12 +90,48 @@ export default function DashboardPage() {
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
 
-  // Redirect if not authenticated
+  // دریافت اطلاعات کاربر
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/');
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      
+      if (user) {
+        fetchCategories(user.id);
+        fetchTransactions(user.id);
+      }
+    };
+    
+    getUser();
+  }, [supabase]);
+
+  // دریافت دسته‌بندی‌ها
+  const fetchCategories = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (!error && data) {
+      setCategories(data);
     }
-  }, [isAuthenticated, router]);
+  };
+
+  // دریافت تراکنش‌ها
+  const fetchTransactions = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(`
+        *,
+        category:categories(name, color)
+      `)
+      .eq('user_id', userId)
+      .order('date', { ascending: false });
+    
+    if (!error && data) {
+      setTransactions(data);
+    }
+  };
 
   // Calculate totals
   useEffect(() => {
@@ -150,66 +156,117 @@ export default function DashboardPage() {
       // Simulate file processing
       setTimeout(() => {
         setIsUploading(false);
-        alert("File processed successfully!");
+        alert("فایل با موفقیت پردازش شد!");
       }, 1500);
     }
   };
 
   // Handle category change for transaction
-  const handleCategoryChange = (transactionId: string, categoryId: string) => {
-    setTransactions(prev => 
-      prev.map(t => 
-        t.id === transactionId 
-          ? { ...t, category: categories.find(c => c.id === categoryId)?.name || t.category } 
-          : t
-      )
-    );
+  const handleCategoryChange = async (transactionId: string, categoryId: string) => {
+    if (!user) return;
+    
+    const { error } = await supabase
+      .from('transactions')
+      .update({ category_id: categoryId })
+      .eq('id', transactionId)
+      .eq('user_id', user.id);
+    
+    if (!error) {
+      setTransactions(prev => 
+        prev.map(t => 
+          t.id === transactionId 
+            ? { ...t, category_id: categoryId } 
+            : t
+        )
+      );
+    }
   };
 
   // Add new category
-  const handleAddCategory = () => {
-    if (newCategoryName.trim()) {
-      const newCategory: Category = {
-        id: `${categories.length + 1}`,
-        name: newCategoryName.trim(),
-        color: `#${Math.floor(Math.random()*16777215).toString(16)}` // Random color
-      };
-      setCategories([...categories, newCategory]);
+  const handleAddCategory = async () => {
+    if (!user || !newCategoryName.trim()) return;
+    
+    const newCategory = {
+      name: newCategoryName.trim(),
+      color: `#${Math.floor(Math.random()*16777215).toString(16)}`, // Random color
+      user_id: user.id
+    };
+    
+    const { data, error } = await supabase
+      .from('categories')
+      .insert(newCategory)
+      .select()
+      .single();
+    
+    if (!error && data) {
+      setCategories([...categories, data]);
       setNewCategoryName("");
       setIsAddingCategory(false);
     }
   };
 
   // Delete category
-  const handleDeleteCategory = (categoryId: string) => {
-    setCategories(categories.filter(c => c.id !== categoryId));
-    // Reset transactions with this category to "Uncategorized"
-    setTransactions(prev => 
-      prev.map(t => 
-        t.category === categories.find(c => c.id === categoryId)?.name 
-          ? { ...t, category: "Uncategorized" } 
-          : t
-      )
-    );
+  const handleDeleteCategory = async (categoryId: string) => {
+    if (!user) return;
+    
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', categoryId)
+      .eq('user_id', user.id);
+    
+    if (!error) {
+      setCategories(categories.filter(c => c.id !== categoryId));
+      
+      // Reset transactions with this category
+      setTransactions(prev => 
+        prev.map(t => 
+          t.category_id === categoryId 
+            ? { ...t, category_id: null } 
+            : t
+        )
+      );
+    }
   };
 
-  if (!isAuthenticated) {
-    return null; // یا یک loading spinner
+  // داده‌های نمودارها
+  const categorySpendingData = categories
+    .filter(category => 
+      transactions.some(t => t.category_id === category.id && t.type === "expense")
+    )
+    .map(category => {
+      const total = transactions
+        .filter(t => t.category_id === category.id && t.type === "expense")
+        .reduce((sum, t) => sum + t.amount, 0);
+      return {
+        name: category.name,
+        value: total
+      };
+    });
+
+  const monthlyCashFlowData = [
+    { month: "فروردین", income: 35000000, expenses: 25000000 },
+    { month: "اردیبهشت", income: 38000000, expenses: 28000000 },
+    { month: "خرداد", income: 40000000, expenses: 30000000 },
+    { month: "تیر", income: 42000000, expenses: 32000000 },
+    { month: "مرداد", income: 45000000, expenses: 35000000 },
+  ];
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>در حال بارگذاری...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8" dir="rtl">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <header className="mb-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">FinWise AI Dashboard</h1>
-            <p className="text-gray-600">AI-powered personal finance management</p>
-          </div>
-          <Button variant="outline" onClick={logout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">داشبورد FinWise AI</h1>
+          <p className="text-gray-600">مدیریت هوشمند مالی شخصی</p>
         </header>
 
         {/* File Upload Section */}
@@ -217,10 +274,10 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
-              Upload Bank Statement
+              بارگذاری صورت‌حساب بانکی
             </CardTitle>
             <CardDescription>
-              Upload your Excel or PDF bank statement to get started
+              فایل اکسل یا PDF صورت‌حساب بانکی خود را بارگذاری کنید
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -233,11 +290,11 @@ export default function DashboardPage() {
                   disabled={isUploading}
                 />
                 {isUploading && (
-                  <p className="mt-2 text-sm text-gray-500">Processing your file...</p>
+                  <p className="mt-2 text-sm text-gray-500">در حال پردازش فایل...</p>
                 )}
               </div>
               <Button disabled={isUploading}>
-                {isUploading ? "Processing..." : "Upload"}
+                {isUploading ? "در حال پردازش..." : "بارگذاری"}
               </Button>
             </div>
           </CardContent>
@@ -247,34 +304,36 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Income</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${totalIncome.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">+12% from last month</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${totalExpenses.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">+5% from last month</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Net Savings</CardTitle>
+              <CardTitle className="text-sm font-medium">درآمد کل</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${(totalIncome - totalExpenses).toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">+18% from last month</p>
+              <div className="text-2xl font-bold text-green-600">{formatRial(totalIncome)}</div>
+              <p className="text-xs text-muted-foreground">+12% نسبت به ماه گذشته</p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">هزینه‌های کل</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{formatRial(totalExpenses)}</div>
+              <p className="text-xs text-muted-foreground">+5% نسبت به ماه گذشته</p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">پس‌انداز خالص</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${totalIncome - totalExpenses >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatRial(totalIncome - totalExpenses)}
+              </div>
+              <p className="text-xs text-muted-foreground">+18% نسبت به ماه گذشته</p>
             </CardContent>
           </Card>
         </div>
@@ -283,7 +342,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <Card>
             <CardHeader>
-              <CardTitle>Spending by Category</CardTitle>
+              <CardTitle>هزینه‌ها بر اساس دسته‌بندی</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -305,7 +364,7 @@ export default function DashboardPage() {
                       />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [`$${value}`, "Amount"]} />
+                  <Tooltip formatter={(value) => [formatRial(Number(value)), "مبلغ"]} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -314,7 +373,7 @@ export default function DashboardPage() {
           
           <Card>
             <CardHeader>
-              <CardTitle>Monthly Cash Flow</CardTitle>
+              <CardTitle>جریان نقدی ماهانه</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -329,11 +388,11 @@ export default function DashboardPage() {
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`$${value}`, "Amount"]} />
+                  <YAxis tickFormatter={(value) => formatRial(value).replace(' ریال', '')} />
+                  <Tooltip formatter={(value) => [formatRial(Number(value)), "مبلغ"]} />
                   <Legend />
-                  <Bar dataKey="income" fill="#06D6A0" name="Income" />
-                  <Bar dataKey="expenses" fill="#FF6B6B" name="Expenses" />
+                  <Bar dataKey="income" fill="#06D6A0" name="درآمد" />
+                  <Bar dataKey="expenses" fill="#FF6B6B" name="هزینه‌ها" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -345,38 +404,38 @@ export default function DashboardPage() {
           {/* Transactions Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Recent Transactions</CardTitle>
+              <CardTitle>تراکنش‌های اخیر</CardTitle>
               <CardDescription>
-                Categorize your financial transactions
+                دسته‌بندی تراکنش‌های مالی خود را مدیریت کنید
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Category</TableHead>
+                    <TableHead>تاریخ</TableHead>
+                    <TableHead>شرح</TableHead>
+                    <TableHead>مبلغ</TableHead>
+                    <TableHead>دسته‌بندی</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transactions.map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell className="font-medium">
-                        {new Date(transaction.date).toLocaleDateString()}
+                        {new Date(transaction.date).toLocaleDateString('fa-IR')}
                       </TableCell>
                       <TableCell>{transaction.description}</TableCell>
                       <TableCell className={transaction.type === "income" ? "text-green-600" : "text-red-600"}>
-                        {transaction.type === "income" ? "+" : "-"}${transaction.amount.toFixed(2)}
+                        {transaction.type === "income" ? "+" : "-"}{formatRial(transaction.amount)}
                       </TableCell>
                       <TableCell>
                         <Select 
-                          value={categories.find(c => c.name === transaction.category)?.id || ""}
+                          value={transaction.category_id || ""}
                           onValueChange={(value) => handleCategoryChange(transaction.id, value)}
                         >
                           <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select category" />
+                            <SelectValue placeholder="انتخاب دسته‌بندی" />
                           </SelectTrigger>
                           <SelectContent>
                             {categories.map((category) => (
@@ -397,40 +456,40 @@ export default function DashboardPage() {
           {/* Category Management */}
           <Card>
             <CardHeader>
-              <CardTitle>Expense Categories</CardTitle>
+              <CardTitle>دسته‌بندی هزینه‌ها</CardTitle>
               <CardDescription>
-                Manage your spending categories
+                دسته‌بندی‌های هزینه‌های خود را مدیریت کنید
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex justify-between mb-4">
-                <h3 className="text-lg font-semibold">Your Categories</h3>
+                <h3 className="text-lg font-semibold">دسته‌بندی‌های شما</h3>
                 <Dialog open={isAddingCategory} onOpenChange={setIsAddingCategory}>
                   <DialogTrigger asChild>
                     <Button size="sm">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Category
+                      <Plus className="h-4 w-4 ml-2" />
+                      افزودن دسته‌بندی
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Add New Category</DialogTitle>
+                      <DialogTitle>افزودن دسته‌بندی جدید</DialogTitle>
                       <DialogDescription>
-                        Create a new category for your transactions
+                        یک دسته‌بندی جدید برای تراکنش‌های خود ایجاد کنید
                       </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
                       <Input
-                        placeholder="Category name"
+                        placeholder="نام دسته‌بندی"
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
                       />
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setIsAddingCategory(false)}>
-                        Cancel
+                        انصراف
                       </Button>
-                      <Button onClick={handleAddCategory}>Add Category</Button>
+                      <Button onClick={handleAddCategory}>افزودن دسته‌بندی</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -444,7 +503,7 @@ export default function DashboardPage() {
                   >
                     <div className="flex items-center">
                       <div 
-                        className="w-4 h-4 rounded-full mr-3" 
+                        className="w-4 h-4 rounded-full ml-3" 
                         style={{ backgroundColor: category.color }}
                       ></div>
                       <span>{category.name}</span>
