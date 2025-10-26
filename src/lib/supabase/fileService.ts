@@ -1,92 +1,92 @@
-// src/lib/fileService.ts
-import { supabase } from '@/lib/supabase/Client'
+// src/lib/supabase/fileService.ts
+import { supabase } from './client'
 
-export interface UploadedFile {
+export interface FinancialFile {
   id: string
+  name: string
+  url: string
   user_id: string
-  file_name: string
-  file_path: string
-  file_size: number
-  file_type: string
-  uploaded_at: string
+  created_at: string
 }
 
-export class FileService {
-  async uploadFile(file: File, userId: string): Promise<UploadedFile | null> {
+class FileService {
+  async uploadFile(file: File, userId: string): Promise<FinancialFile | null> {
     try {
-      const fileName = `${userId}/${Date.now()}_${file.name}`
+      const fileName = `${userId}/${Date.now()}-${file.name}`
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('bank-statements')
+      const { data, error } = await supabase.storage
+        .from('financial-statements')
         .upload(fileName, file)
 
-      if (uploadError) {
-        console.error('Error uploading file:', uploadError)
+      if (error) {
+        console.error('Error uploading file:', error)
         return null
       }
 
-      const { data, error } = await supabase
-        .from('uploaded_files')
-        .insert([
-          {
-            user_id: userId,
-            file_name: file.name,
-            file_path: uploadData.path,
-            file_size: file.size,
-            file_type: file.type,
-            uploaded_at: new Date().toISOString()
-          }
-        ])
+      const { data: { publicUrl } } = supabase.storage
+        .from('financial-statements')
+        .getPublicUrl(fileName)
+
+      const fileRecord: Omit<FinancialFile, 'id' | 'created_at'> = {
+        name: file.name,
+        url: publicUrl,
+        user_id: userId
+      }
+
+      const { data: recordData, error: recordError } = await supabase
+        .from('financial_files')
+        .insert([fileRecord])
         .select()
         .single()
 
-      if (error) {
-        console.error('Error saving file info:', error)
+      if (recordError) {
+        console.error('Error saving file record:', recordError)
         return null
       }
 
-      return data
+      return recordData
     } catch (error) {
       console.error('Error in uploadFile:', error)
       return null
     }
   }
 
-  async getUserFiles(userId: string): Promise<UploadedFile[]> {
+  async getFiles(userId: string): Promise<FinancialFile[]> {
     try {
       const { data, error } = await supabase
-        .from('uploaded_files')
+        .from('financial_files')
         .select('*')
         .eq('user_id', userId)
-        .order('uploaded_at', { ascending: false })
+        .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error fetching user files:', error)
+        console.error('Error fetching files:', error)
         return []
       }
 
       return data || []
     } catch (error) {
-      console.error('Error in getUserFiles:', error)
+      console.error('Error in getFiles:', error)
       return []
     }
   }
 
-  async deleteFile(fileId: string, filePath: string): Promise<boolean> {
+  async deleteFile(id: string, fileName: string): Promise<boolean> {
     try {
+      // Delete from storage
       const { error: storageError } = await supabase.storage
-        .from('bank-statements')
-        .remove([filePath])
+        .from('financial-statements')
+        .remove([fileName])
 
       if (storageError) {
         console.error('Error deleting file from storage:', storageError)
-        return false
       }
 
+      // Delete record from database
       const { error: dbError } = await supabase
-        .from('uploaded_files')
+        .from('financial_files')
         .delete()
-        .eq('id', fileId)
+        .eq('id', id)
 
       if (dbError) {
         console.error('Error deleting file record:', dbError)
@@ -97,19 +97,6 @@ export class FileService {
     } catch (error) {
       console.error('Error in deleteFile:', error)
       return false
-    }
-  }
-
-  async getFileUrl(filePath: string): Promise<string | null> {
-    try {
-      const { data } = supabase.storage
-        .from('bank-statements')
-        .getPublicUrl(filePath)
-
-      return data.publicUrl
-    } catch (error) {
-      console.error('Error in getFileUrl:', error)
-      return null
     }
   }
 }
