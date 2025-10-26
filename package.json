@@ -14,7 +14,7 @@
     "@radix-ui/react-slot": "^1.0.2",
     "class-variance-authority": "^0.7.0",
     "@supabase/supabase-js": "^2.x.x",
-    "date-fns": "^2.30.1",
+    "date-fns": "^2.30.0"
     "clsx": "^2.0.0",
     "lucide-react": "^0.292.0",
     "next": "14.0.0",
