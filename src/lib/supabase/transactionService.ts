@@ -1,34 +1,23 @@
-// src/lib/transactionService.ts
-import { supabase } from '@/lib/supabase/Client'
+// src/lib/supabase/transactionService.ts
+import { supabase } from './client'
 
 export interface Transaction {
   id: string
-  user_id: string
   date: string
   description: string
   amount: number
   type: 'income' | 'expense'
-  category_id: string | null
-  file_id: string | null
+  category: string
+  user_id: string
   created_at: string
 }
 
-export interface TransactionWithCategory extends Transaction {
-  category?: {
-    name: string
-    color: string
-  }
-}
-
-export class TransactionService {
-  async getUserTransactions(userId: string): Promise<TransactionWithCategory[]> {
+class TransactionService {
+  async getTransactions(userId: string): Promise<Transaction[]> {
     try {
       const { data, error } = await supabase
         .from('transactions')
-        .select(`
-          *,
-          category:categories(name, color)
-        `)
+        .select('*')
         .eq('user_id', userId)
         .order('date', { ascending: false })
 
@@ -39,7 +28,7 @@ export class TransactionService {
 
       return data || []
     } catch (error) {
-      console.error('Error in getUserTransactions:', error)
+      console.error('Error in getTransactions:', error)
       return []
     }
   }
@@ -102,128 +91,75 @@ export class TransactionService {
     }
   }
 
-  async getUserFinancialSummary(userId: string): Promise<{
-    totalIncome: number
-    totalExpenses: number
-    netSavings: number
-  }> {
-    try {
-      const { data: incomeData, error: incomeError } = await supabase
-        .from('transactions')
-        .select('amount')
-        .eq('user_id', userId)
-        .eq('type', 'income')
-
-      if (incomeError) {
-        console.error('Error fetching income:', incomeError)
-        return { totalIncome: 0, totalExpenses: 0, netSavings: 0 }
-      }
-
-      const { data: expenseData, error: expenseError } = await supabase
-        .from('transactions')
-        .select('amount')
-        .eq('user_id', userId)
-        .eq('type', 'expense')
-
-      if (expenseError) {
-        console.error('Error fetching expenses:', expenseError)
-        return { totalIncome: 0, totalExpenses: 0, netSavings: 0 }
-      }
-
-      const totalIncome = incomeData?.reduce((sum, t) => sum + t.amount, 0) || 0
-      const totalExpenses = expenseData?.reduce((sum, t) => sum + t.amount, 0) || 0
-      const netSavings = totalIncome - totalExpenses
-
-      return { totalIncome, totalExpenses, netSavings }
-    } catch (error) {
-      console.error('Error in getUserFinancialSummary:', error)
-      return { totalIncome: 0, totalExpenses: 0, netSavings: 0 }
-    }
-  }
-
-  async getCategorySpendingData(userId: string): Promise<{ name: string; value: number; color: string }[]> {
+  async getSpendingByCategory(userId: string): Promise<{ name: string; value: number }[]> {
     try {
       const { data, error } = await supabase
         .from('transactions')
-        .select(`
-          amount,
-          category:categories(name, color)
-        `)
+        .select('category, amount')
         .eq('user_id', userId)
         .eq('type', 'expense')
-        .not('category_id', 'is', null)
 
       if (error) {
-        console.error('Error fetching category spending data:', error)
+        console.error('Error fetching spending data:', error)
         return []
       }
 
-      const categoryMap: Record<string, { name: string; value: number; color: string }> = {}
+      // Group by category and sum amounts
+      const spendingMap: Record<string, number> = {}
       
-      data?.forEach(transaction => {
-        if (transaction.category) {
-          const key = transaction.category.name
-          if (!categoryMap[key]) {
-            categoryMap[key] = {
-              name: transaction.category.name,
-              value: 0,
-              color: transaction.category.color || '#8884d8'
-            }
-          }
-          categoryMap[key].value += transaction.amount
+      data.forEach(transaction => {
+        if (spendingMap[transaction.category]) {
+          spendingMap[transaction.category] += transaction.amount
+        } else {
+          spendingMap[transaction.category] = transaction.amount
         }
       })
 
-      return Object.values(categoryMap)
+      return Object.entries(spendingMap).map(([name, value]) => ({
+        name,
+        value
+      }))
     } catch (error) {
-      console.error('Error in getCategorySpendingData:', error)
+      console.error('Error in getSpendingByCategory:', error)
       return []
     }
   }
 
-  async getMonthlyCashFlowData(userId: string): Promise<{ month: string; income: number; expenses: number }[]> {
+  async getMonthlyCashFlow(userId: string): Promise<{ month: string; income: number; expenses: number }[]> {
     try {
       const { data, error } = await supabase
         .from('transactions')
         .select('date, amount, type')
         .eq('user_id', userId)
-        .gte('date', new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1).toISOString())
 
       if (error) {
-        console.error('Error fetching monthly cash flow data:', error)
+        console.error('Error fetching cash flow data:', error)
         return []
       }
 
-      const monthMap: Record<string, { month: string; income: number; expenses: number }> = {}
+      // Group by month
+      const monthlyData: Record<string, { income: number; expenses: number }> = {}
       
-      data?.forEach(transaction => {
-        const date = new Date(transaction.date)
-        const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`
-        const monthName = date.toLocaleDateString('fa-IR', { month: 'short', year: 'numeric' })
-        
-        if (!monthMap[monthKey]) {
-          monthMap[monthKey] = {
-            month: monthName,
-            income: 0,
-            expenses: 0
-          }
+      data.forEach(transaction => {
+        const month = transaction.date.substring(0, 7) // YYYY-MM
+        if (!monthlyData[month]) {
+          monthlyData[month] = { income: 0, expenses: 0 }
         }
         
         if (transaction.type === 'income') {
-          monthMap[monthKey].income += transaction.amount
+          monthlyData[month].income += transaction.amount
         } else {
-          monthMap[monthKey].expenses += transaction.amount
+          monthlyData[month].expenses += transaction.amount
         }
       })
 
-      return Object.values(monthMap).sort((a, b) => {
-        const [aYear, aMonth] = a.month.split('-')
-        const [bYear, bMonth] = b.month.split('-')
-        return new Date(parseInt(aYear), parseInt(aMonth) - 1).getTime() - 
-               new Date(parseInt(bYear), parseInt(bMonth) - 1).getTime()
-      })
+      return Object.entries(monthlyData).map(([month, values]) => ({
+        month,
+        income: values.income,
+        expenses: values.expenses
+      }))
     } catch (error) {
-      console.error('Error in getMonthlyCashFlowData:', error)
+      console.error('Error in getMonthlyCashFlow:', error)
       return []
     }
   }
